@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Revizuire caroserie{% endblock %}
+
+{% block content %}
+<form class="offer-form" method="post" action="/caroserii/save">
+  <input type="hidden" name="document_sursa" value="{{ document_sursa }}">
+  {% if confirm_duplicate %}
+    <input type="hidden" name="confirm_duplicate" value="1">
+  {% endif %}
+
+  <section class="form-section">
+    <h2>Revizuire import caroserie</h2>
+    <p class="muted">AI-ul nu salveaza direct in Excel. Verifica si corecteaza campurile inainte de salvare.</p>
+    {% if error %}
+      <p class="form-error">{{ error }}</p>
+    {% endif %}
+    {% if duplicate_warning %}
+      <p class="warning-box">{{ duplicate_warning }} Verifica datele inainte de salvare.</p>
+    {% endif %}
+    <p class="config-summary">Document sursa: {{ document_sursa }}</p>
+  </section>
+
+  {% for group_title, fields in field_groups %}
+    <section class="form-section">
+      <h2>{{ group_title }}</h2>
+      <div class="grid">
+        {% for field in fields %}
+          {% set value = form_values.get(field, "") %}
+          <label class="{% if field in list_fields or field in ['observatii', 'extraction_notes', 'warnings', 'dotari_incluse'] %}wide{% endif %} {% if not value %}unknown-field{% endif %}">
+            {{ field_labels.get(field, field) }}
+            {% if field == "categorie" %}
+              <select name="{{ field }}">
+                <option value="">Necunoscut</option>
+                {% for category in category_values %}
+                  <option value="{{ category }}" {% if value == category %}selected{% endif %}>{{ category }}</option>
+                {% endfor %}
+              </select>
+            {% elif field in bool_fields %}
+              <select name="{{ field }}">
+                <option value="" {% if value == "" %}selected{% endif %}>Necunoscut</option>
+                <option value="da" {% if value is sameas true %}selected{% endif %}>Da</option>
+                <option value="nu" {% if value is sameas false %}selected{% endif %}>Nu</option>
+              </select>
+            {% elif field in list_fields or field in ['observatii', 'extraction_notes', 'warnings', 'dotari_incluse'] %}
+              <textarea name="{{ field }}" rows="4">{{ value }}</textarea>
+            {% else %}
+              <input type="text" name="{{ field }}" value="{{ value }}">
+            {% endif %}
+          </label>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <section class="form-section">
+    <h2>Compatibil cu</h2>
+    <p class="muted">Selectia de mai jos este aprobarea umana finala. AI-ul doar poate preselecta potriviri evidente.</p>
+    <div class="checkbox-grid">
+      {% for chassis in chassis_options %}
+        <label class="checkbox-label">
+          <input type="checkbox" name="compatible_chassis_ids" value="{{ chassis.sasiu_id }}" {% if chassis.sasiu_id in selected_chassis_ids %}checked{% endif %}>
+          <span>{{ chassis.label }}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="actions">
+    <button type="submit">{% if confirm_duplicate %}Salveaza oricum{% else %}Salveaza in Excel{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

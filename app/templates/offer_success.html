@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Oferta generata{% endblock %}
+
+{% block content %}
+<section class="form-section success-panel">
+  <h2>Oferta generata</h2>
+  <p>Numar oferta: <strong>{{ offer_number }}</strong></p>
+  <p>Total fara TVA: <strong>{{ "%.2f"|format(total_fara_tva) }} EUR</strong></p>
+  <div class="actions">
+    <a class="button-link" href="/download/{{ pdf_filename }}" target="_blank" rel="noopener">Deschide PDF</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Import caroserii ISUZU{% endblock %}
+
+{% block content %}
+<section class="form-section">
+  <h2>Caroserii</h2>
+  <p class="muted">Importa o oferta furnizor si transforma documentul intr-o fisa editabila pentru baza de date.</p>
+  <div class="actions split-actions">
+    <a class="button-link secondary-link" href="/caroserii/lista">Vezi caroserii salvate</a>
+    <a class="button-link" href="/caroserii/import">Importa oferta furnizor</a>
+  </div>
+</section>
+
+{% if not body_home %}
+<form class="offer-form" method="post" action="/caroserii/import" enctype="multipart/form-data">
+  <section class="form-section">
+    <h2>Importa oferta furnizor</h2>
+    {% if error %}
+      <p class="form-error">{{ error }}</p>
+    {% endif %}
+    {% if saved_document %}
+      <p class="config-summary">Documentul a fost incarcat si pastrat local: {{ saved_document }}</p>
+    {% endif %}
+    <p class="muted">Sunt acceptate fisiere PDF si DOCX. Limita maxima: 20 MB.</p>
+    <label>
+      Document furnizor
+      <input type="file" name="supplier_document" accept=".pdf,.docx,.doc" required>
+    </label>
+    <div class="actions">
+      <button type="submit">Analizeaza cu AI</button>
+    </div>
+  </section>
+</form>
+
+{% if saved_document %}
+<form class="offer-form" method="post" action="/caroserii/import/retry">
+  <input type="hidden" name="document_sursa" value="{{ saved_document }}">
+  <section class="form-section">
+    <h2>Reincearca analiza</h2>
+    <p class="muted">Model configurat: {{ openai_model }}</p>
+    <div class="actions">
+      <button type="submit">Reincearca analiza AI</button>
+    </div>
+  </section>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

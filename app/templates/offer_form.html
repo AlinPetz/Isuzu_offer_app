@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Oferta sasiu ISUZU{% endblock %}
+
+{% block content %}
+<form class="offer-form" method="post" action="/generate-offer">
+  <section class="form-section">
+    <h2>Configurator sasiu</h2>
+    <input type="hidden" id="sasiu_id" name="sasiu_id">
+    {% if workbook_error %}<p class="form-error" role="alert">{{ workbook_error }}</p>{% endif %}
+    {% set blocked = configurator.records | selectattr('errors') | list %}
+    {% if blocked %}
+      <details class="warning-box">
+        <summary>{{ blocked | length }} configuratii blocate pentru verificare</summary>
+        <ul>
+          {% for record in blocked %}
+            <li>{{ record.sasiu_id or 'Fara ID' }} (rand {{ record.excel_row }}): {{ record.errors | join(' ') }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+    {% set review = configurator.records | selectattr('reviews') | list %}
+    {% if review %}
+      <details class="warning-box">
+        <summary>{{ review | length }} configuratii necesita verificare manuala</summary>
+        <ul>
+          {% for record in review %}
+            <li>{{ record.sasiu_id }} (rand {{ record.excel_row }}): {{ record.reviews | join(' ') }}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
+
+    <div class="grid">
+      {% for field in configurator.fields %}
+        <label class="config-field {% if not loop.first %}hidden{% endif %}" data-field="{{ field.key }}">
+          {{ field.label }}
+          <select id="{{ field.key }}" name="{{ field.key }}" {% if loop.first %}required{% endif %}>
+            <option value="">Alege optiunea</option>
+          </select>
+        </label>
+      {% endfor %}
+      <label class="wide hidden" id="chassis_choice_field">
+        Configuratie exacta
+        <select id="chassis_choice"></select>
+      </label>
+    </div>
+
+    <div id="chassis_summary" class="config-summary hidden" role="status"></div>
+    <p id="chassis_error" class="form-error hidden" role="alert"></p>
+    <p id="chassis_warning" class="warning-box hidden" role="status"></p>
+  </section>
+
+  <section class="form-section hidden" id="commercial_section" aria-labelledby="commercial_title">
+    <h2 id="commercial_title">Configurație comercială</h2>
+    <input type="hidden" name="commercial_revision" id="commercial_revision">
+    <div class="grid">
+      <label>
+        Reducere șasiu (EUR)
+        <input type="text" inputmode="decimal" name="discount_sasiu" id="discount_sasiu" value="0">
+      </label>
+      <div class="pto-choice">
+        <label class="checkbox-label" for="include_pto">
+          <input type="checkbox" name="include_pto" id="include_pto" value="true" disabled>
+          Include PTO
+        </label>
+        <p id="pto_details" class="muted"></p>
+      </div>
+    </div>
+    <h3>Echipamente opționale</h3>
+    <div id="optionale_rows" class="optional-list"></div>
+    <div class="actions optional-actions">
+      <button class="secondary-button" id="add_optional" type="button">Adaugă opțional</button>
+    </div>
+    <template id="optional_row_template">
+      <div class="optional-row">
+        <label>
+          Denumire
+          <input type="text" name="denumire_optional">
+        </label>
+        <label>
+          Preț EUR fără TVA
+          <input type="text" inputmode="decimal" name="pret_optional_eur">
+        </label>
+        <button class="secondary-button remove-optional" type="button">Șterge</button>
+      </div>
+    </template>
+    <dl id="pricing_lines" class="pricing-lines" aria-live="polite"></dl>
+    <p id="pricing_error" class="form-error hidden" role="alert"></p>
+  </section>
+
+  <section class="form-section">
+    <h2>Client</h2>
+    <div class="grid">
+      <label>
+        Nume
+        <input type="text" name="nume" required>
+      </label>
+      <label>
+        Judet
+        <input type="text" name="judet">
+      </label>
+      <label class="wide">
+        Adresa
+        <input type="text" name="adresa">
+      </label>
+      <label>
+        Email
+        <input type="email" name="email">
+      </label>
+      <label>
+        Nr. tel
+        <input type="tel" name="nr_tel">
+      </label>
+      <label class="wide">
+        Persoana contact
+        <input type="text" name="persoana_contact">
+      </label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h2>Consultant</h2>
+    <label for="intern_email">Persoana interna</label>
+    <select id="intern_email" name="intern_email" required>
+      <option value="">Alege consultantul</option>
+      {% for user in intern_users %}
+        <option value="{{ user.email }}">{{ user.nume }} | {{ user.telefon }} | {{ user.email }}</option>
+      {% endfor %}
+    </select>
+  </section>
+
+  <section class="form-section">
+    <h2>Termeni comerciali</h2>
+    <div class="grid">
+      <label>
+        Data ofertei
+        <input type="date" name="offer_date">
+      </label>
+      <label>
+        Valabilitate zile
+        <input type="number" name="valabilitate_zile" value="30" min="1">
+      </label>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button id="submit_button" type="submit" disabled>Genereaza PDF</button>
+  </div>
+</form>
+
+<script type="module">
+  import { cents, formatEUR, previewPricing } from "/static/js/pricing_preview.mjs";
+
+  const configurator = {{ configurator|tojson }};
+  const records = configurator.records;
+  const fields = configurator.fields;
+  const submitButton = document.getElementById("submit_button");
+  const hiddenChassisId = document.getElementById("sasiu_id");
+  const exactChoice = document.getElementById("chassis_choice");
+  const exactField = document.getElementById("chassis_choice_field");
+  const summary = document.getElementById("chassis_summary");
+  const errorBox = document.getElementById("chassis_error");
+  const warningBox = document.getElementById("chassis_warning");
+  const controls = fields.map(({key}) => document.getElementById(key));
+  const unspecified = "__unspecified__";
+  let candidates = [];
+
+  function setOptions(select, choices) {
+    const previous = select.value;
+    select.replaceChildren(new Option("Alege optiunea", ""));
+    choices.forEach(([key, label]) => select.add(new Option(label, key)));
+    if (choices.some(([key]) => key === previous)) select.value = previous;
+  }
+
+  function updateExactSelection() {
+    const match = candidates.find(item => String(item.excel_row) === exactChoice.value);
+    hiddenChassisId.value = match && !match.errors.length && !match.reviews.length ? match.sasiu_id : "";
+    setCommercial(hiddenChassisId.value ? match.commercial : null);
+    summary.textContent = match ? [match.variant, match.engine_choice, match.gearbox, match.wheelbase_choice, match.label].filter(Boolean).join(" | ") : "";
+    errorBox.textContent = match ? match.errors.join(" ") : "";
+    warningBox.textContent = match ? [
+      ...(match.reviews.length ? ["Verificare manuala: " + match.reviews.join(" ")] : []),
+      ...match.warnings,
+    ].join(" ") : "";
+    [summary, errorBox, warningBox].forEach(item => item.classList.toggle("hidden", !item.textContent));
+  }
+
+  function updateConfigurator() {
+    let matches = records;
+    let ready = true;
+    controls.forEach((select, index) => {
+      const key = fields[index].key;
+      const values = ready ? [...new Set(matches.map(row => row[key] || unspecified))].sort() : [];
+      setOptions(select, values.map(value => [value, value === unspecified ? "Nespecificat" : value]));
+      const visible = ready && (index === 0 || values.length > 1);
+      select.closest("label").classList.toggle("hidden", !visible);
+      select.required = visible;
+      if (!visible && values.length === 1) select.value = values[0];
+      if (!select.value) {
+        ready = false;
+        return;
+      }
+      matches = matches.filter(row => (row[key] || unspecified) === select.value);
+    });
+
+    candidates = ready ? matches : [];
+    setOptions(exactChoice, candidates.map(item => [
+      String(item.excel_row), item.label + (item.errors.length ? " | Blocat" : item.reviews.length ? " | Verificare manuala" : ""),
+    ]));
+    exactField.classList.toggle("hidden", !candidates.length);
+    exactChoice.required = Boolean(candidates.length);
+    if (candidates.length === 1) exactChoice.value = String(candidates[0].excel_row);
+    updateExactSelection();
+  }
+
+  controls.forEach((select, index) => select.addEventListener("change", () => {
+    controls.slice(index + 1).forEach(control => { control.value = ""; });
+    exactChoice.value = "";
+    updateConfigurator();
+  }));
+  exactChoice.addEventListener("change", updateExactSelection);
+
+  const optionalRows = document.getElementById("optionale_rows");
+  const addOptionalButton = document.getElementById("add_optional");
+  const commercialSection = document.getElementById("commercial_section");
+  const revision = document.getElementById("commercial_revision");
+  const discount = document.getElementById("discount_sasiu");
+  const pto = document.getElementById("include_pto");
+  const ptoDetails = document.getElementById("pto_details");
+  const priceLines = document.getElementById("pricing_lines");
+  const pricingError = document.getElementById("pricing_error");
+  let commercial = null;
+
+  function setCommercial(next) {
+    if (next?.revision !== commercial?.revision) pto.checked = false;
+    commercial = next;
+    revision.value = next?.revision || "";
+    commercialSection.classList.toggle("hidden", !next);
+    pto.disabled = !next?.pto_price;
+    ptoDetails.textContent = next?.pto_price
+      ? `${next.pto_code} · ${formatEUR(cents(next.pto_price))}`
+      : next?.pto_warning || "";
+    refreshPricing();
+  }
+
+  function addPriceLine(label, amount, className = "", prefix = "") {
+    const term = document.createElement("dt");
+    const value = document.createElement("dd");
+    term.textContent = label;
+    value.textContent = amount === null ? "—" : prefix + formatEUR(amount);
+    if (className) {
+      term.className = className;
+      value.className = className;
+    }
+    priceLines.append(term, value);
+  }
+
+  function refreshPricing() {
+    submitButton.disabled = true;
+    priceLines.replaceChildren();
+    if (!commercial) return;
+    const items = [...optionalRows.children].map(row => ({
+      description: row.querySelector("[name=denumire_optional]").value,
+      price: row.querySelector("[name=pret_optional_eur]").value,
+    }));
+    const result = previewPricing(commercial, discount.value, pto.checked, items);
+    addPriceLine("Preț de bază șasiu", result.base);
+    addPriceLine("Transport", result.transport);
+    addPriceLine("Subtotal șasiu și transport", result.base + result.transport, "pricing-subtotal");
+    addPriceLine(pto.checked ? `PTO · ${commercial.pto_code}` : "PTO (neinclus)", result.pto);
+    result.optionals.forEach(item => addPriceLine(item.description, item.price));
+    addPriceLine("Reducere șasiu", result.discount, "", result.discount ? "−" : "");
+    addPriceLine("Total fără TVA", result.total, "pricing-total");
+    pricingError.textContent = result.error;
+    pricingError.classList.toggle("hidden", !result.error);
+    submitButton.disabled = !hiddenChassisId.value || Boolean(result.error);
+  }
+
+  addOptionalButton.addEventListener("click", () => {
+    const row = document.getElementById("optional_row_template").content.cloneNode(true);
+    optionalRows.append(row);
+    optionalRows.lastElementChild.querySelector("input").focus();
+    refreshPricing();
+  });
+
+  optionalRows.addEventListener("click", (event) => {
+    if (!event.target.classList.contains("remove-optional")) return;
+    event.target.closest(".optional-row").remove();
+    addOptionalButton.focus();
+    refreshPricing();
+  });
+  optionalRows.addEventListener("input", refreshPricing);
+  discount.addEventListener("input", refreshPricing);
+  pto.addEventListener("change", refreshPricing);
+
+  updateConfigurator();
+</script>
+{% endblock %}

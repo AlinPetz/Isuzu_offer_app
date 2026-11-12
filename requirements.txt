@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+pandas
+openpyxl
+pydantic
+reportlab
+pillow
+pywebview
+pyinstaller
+openai
+python-dotenv
+pypdf
+python-docx

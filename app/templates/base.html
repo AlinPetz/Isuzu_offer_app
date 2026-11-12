@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}ISUZU Offer Generator{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-mark">ISUZU</div>
+      <div>
+        <p class="eyebrow">Generator local de oferte</p>
+        <h1>Oferta sasiu</h1>
+      </div>
+      <nav class="topnav">
+        <a href="/">Sasiuri</a>
+        <a href="/caroserii">Caroserii</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

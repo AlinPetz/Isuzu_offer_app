@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Caroserii salvate{% endblock %}
+
+{% block content %}
+{% if body_id %}
+<section class="form-section success-panel">
+  <h2>Caroserie salvata</h2>
+  <p><strong>ID:</strong> {{ body_id }}</p>
+  <p><strong>Denumire:</strong> {{ denumire }}</p>
+  <p><strong>Categorie:</strong> {{ categorie }}</p>
+  <p><strong>Fisier Excel:</strong> {{ workbook_path }}</p>
+  <div class="actions split-actions">
+    <a class="button-link secondary-link" href="/caroserii/import">Importa alta oferta</a>
+    <a class="button-link" href="/caroserii/lista">Vezi lista</a>
+  </div>
+</section>
+{% else %}
+<section class="form-section">
+  <h2>Caroserii salvate</h2>
+  <p class="muted">Fisier Excel: {{ workbook_path }}</p>
+  {% if bodies %}
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Categorie</th>
+            <th>Denumire</th>
+            <th>Furnizor</th>
+            <th>Oferta furnizor</th>
+            <th>Pret EUR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for body in bodies %}
+            <tr>
+              <td>{{ body.body_id }}</td>
+              <td>{{ body.categorie }}</td>
+              <td>{{ body.denumire }}</td>
+              <td>{{ body.furnizor }}</td>
+              <td>{{ body.nr_oferta_furnizor }}</td>
+              <td>{{ body.pret_eur_fara_tva }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="config-summary">Nu exista caroserii salvate inca.</p>
+  {% endif %}
+  <div class="actions">
+    <a class="button-link" href="/caroserii/import">Importa oferta furnizor</a>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
